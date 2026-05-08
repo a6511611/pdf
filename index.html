@@ -1,0 +1,649 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes">
+    <title>全能文档转语音 | PDF/图片/Word</title>
+    <!-- PDF.js -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.16.105/pdf.min.js"></script>
+    <!-- Tesseract.js OCR (稳定版本) -->
+    <script src="https://cdn.jsdelivr.net/npm/tesseract.js@4.1.1/dist/tesseract.min.js"></script>
+    <!-- Mammoth.js 用于 .docx 解析 -->
+    <script src="https://cdn.jsdelivr.net/npm/mammoth@1/mammoth.browser.min.js"></script>
+    <script>
+        pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.16.105/pdf.worker.min.js';
+    </script>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            background: linear-gradient(145deg, #f1f5f9 0%, #e6edf4 100%);
+            font-family: 'Inter', system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+            padding: 20px;
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .card {
+            max-width: 1100px;
+            width: 100%;
+            background: rgba(255,255,255,0.96);
+            backdrop-filter: blur(2px);
+            border-radius: 48px;
+            box-shadow: 0 25px 50px -12px rgba(0,0,0,0.25);
+            padding: 30px 28px 40px;
+            transition: all 0.2s;
+        }
+
+        h1 {
+            font-size: 2rem;
+            font-weight: 800;
+            background: linear-gradient(135deg, #0f2b3d, #1e4a76);
+            background-clip: text;
+            -webkit-background-clip: text;
+            color: transparent;
+            letter-spacing: -0.5px;
+        }
+
+        .sub {
+            color: #475569;
+            margin: 8px 0 28px 0;
+            padding-left: 14px;
+            border-left: 4px solid #3b82f6;
+            font-weight: 450;
+        }
+
+        .upload-area {
+            border: 2px dashed #94a3b8;
+            background: #fefefe;
+            border-radius: 40px;
+            padding: 40px 20px;
+            text-align: center;
+            cursor: pointer;
+            transition: all 0.2s;
+            margin-bottom: 28px;
+        }
+
+        .upload-area:hover {
+            border-color: #3b82f6;
+            background: #f0f9ff;
+            transform: scale(0.99);
+        }
+
+        .upload-icon {
+            font-size: 56px;
+            margin-bottom: 12px;
+        }
+
+        .upload-text {
+            font-weight: 600;
+            font-size: 1.2rem;
+            color: #1e293b;
+        }
+
+        .upload-hint {
+            font-size: 0.85rem;
+            color: #64748b;
+            margin-top: 10px;
+        }
+
+        input[type="file"] {
+            display: none;
+        }
+
+        .file-info {
+            background: #eef2ff;
+            border-radius: 48px;
+            padding: 14px 22px;
+            margin-bottom: 24px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            flex-wrap: wrap;
+            gap: 12px;
+        }
+
+        .file-name {
+            font-weight: 700;
+            color: #1e3a8a;
+            word-break: break-all;
+        }
+
+        .reset-btn {
+            background: none;
+            border: none;
+            color: #dc2626;
+            font-weight: 600;
+            cursor: pointer;
+            padding: 6px 14px;
+            border-radius: 40px;
+            transition: 0.2s;
+        }
+
+        .reset-btn:hover {
+            background: #fee2e2;
+        }
+
+        .controls {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 20px;
+            background: #f8fafc;
+            padding: 18px 24px;
+            border-radius: 60px;
+            margin-bottom: 28px;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .control-group {
+            display: flex;
+            align-items: center;
+            gap: 14px;
+            background: white;
+            padding: 6px 20px;
+            border-radius: 48px;
+            box-shadow: 0 1px 2px rgba(0,0,0,0.05);
+        }
+
+        .control-group label {
+            font-weight: 600;
+            color: #0f172a;
+        }
+
+        select, .speed-buttons {
+            background: #f1f5f9;
+            border: none;
+            padding: 8px 16px;
+            border-radius: 40px;
+            font-weight: 500;
+            cursor: pointer;
+            font-size: 0.9rem;
+        }
+
+        .speed-buttons {
+            display: flex;
+            gap: 8px;
+        }
+
+        .speed-btn {
+            background: #e2e8f0;
+            border: none;
+            padding: 6px 16px;
+            border-radius: 32px;
+            font-weight: 500;
+            cursor: pointer;
+            transition: 0.1s;
+        }
+
+        .speed-btn.active {
+            background: #3b82f6;
+            color: white;
+        }
+
+        .action-buttons {
+            display: flex;
+            gap: 18px;
+            justify-content: center;
+            margin-bottom: 30px;
+            flex-wrap: wrap;
+        }
+
+        .btn {
+            border: none;
+            padding: 12px 28px;
+            border-radius: 60px;
+            font-weight: 600;
+            font-size: 1rem;
+            cursor: pointer;
+            transition: 0.2s;
+            background: white;
+            box-shadow: 0 2px 6px rgba(0,0,0,0.08);
+        }
+
+        .btn-primary {
+            background: #1e293b;
+            color: white;
+        }
+
+        .btn-primary:hover {
+            background: #0f172a;
+            transform: translateY(-2px);
+        }
+
+        .player-area {
+            background: #ffffffcc;
+            backdrop-filter: blur(4px);
+            border-radius: 44px;
+            padding: 20px;
+            text-align: center;
+        }
+
+        .status {
+            color: #2563eb;
+            font-size: 0.95rem;
+            margin-top: 14px;
+            font-weight: 500;
+        }
+
+        .error {
+            color: #b91c1c;
+            background: #fee2e2;
+            padding: 6px 14px;
+            border-radius: 40px;
+            display: inline-block;
+        }
+
+        .progress {
+            background: #e2e8f0;
+            border-radius: 30px;
+            height: 8px;
+            width: 100%;
+            margin: 10px 0;
+        }
+
+        .progress-bar {
+            background: #3b82f6;
+            width: 0%;
+            height: 8px;
+            border-radius: 30px;
+            transition: width 0.2s;
+        }
+
+        footer {
+            font-size: 0.7rem;
+            text-align: center;
+            margin-top: 32px;
+            color: #62748c;
+        }
+
+        @media (max-width: 640px) {
+            .card { padding: 20px; }
+            .controls { flex-direction: column; align-items: stretch; }
+            .control-group { justify-content: space-between; }
+        }
+    </style>
+</head>
+<body>
+
+<div class="card">
+    <h1>📄🖼️📝 全能文档转语音</h1>
+    <div class="sub">支持 PDF (文字/扫描) 、图片、Word (.docx) —— 自动提取/OCR识别，然后朗读</div>
+
+    <!-- 上传区域 -->
+    <div id="dropZone" class="upload-area">
+        <div class="upload-icon">📂✨</div>
+        <div class="upload-text">拖拽或点击上传</div>
+        <div class="upload-hint">支持 PDF, JPG, PNG, WEBP, DOCX (≤30MB) | 扫描件自动OCR | Word仅支持 .docx 格式</div>
+        <input type="file" id="fileInput" accept=".pdf,.jpg,.jpeg,.png,.webp,.gif,.bmp,.docx">
+    </div>
+
+    <!-- 文件信息栏 -->
+    <div id="fileInfoArea" style="display: none;" class="file-info">
+        <span>📄 <span id="fileNameDisplay" class="file-name"></span> (<span id="fileTypeHint"></span>)</span>
+        <button id="resetFileBtn" class="reset-btn">✖ 清除</button>
+    </div>
+
+    <!-- 进度条（OCR时显示） -->
+    <div id="progressArea" style="display: none; margin-bottom: 20px;">
+        <div class="progress">
+            <div id="ocrProgressBar" class="progress-bar"></div>
+        </div>
+        <div id="progressText" style="font-size: 0.8rem; text-align: center; color: #475569;"></div>
+    </div>
+
+    <!-- 音色 & 语速 -->
+    <div class="controls">
+        <div class="control-group">
+            <span>🎤 声音</span>
+            <select id="voiceSelect"></select>
+        </div>
+        <div class="control-group">
+            <span>⚡ 语速</span>
+            <div class="speed-buttons" id="speedGroup">
+                <button data-rate="0.75" class="speed-btn">0.75x</button>
+                <button data-rate="1" class="speed-btn active">1.0x</button>
+                <button data-rate="1.25" class="speed-btn">1.25x</button>
+                <button data-rate="1.5" class="speed-btn">1.5x</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- 主要操作 -->
+    <div class="action-buttons">
+        <button id="speakBtn" class="btn btn-primary" disabled>🔊 朗读试听</button>
+        <button id="exportTextBtn" class="btn btn-outline" disabled>📥 导出文本</button>
+    </div>
+
+    <div class="player-area">
+        <div id="statusMsg" class="status">✅ 就绪，请上传 PDF/图片/Word 文档（扫描件自动OCR）</div>
+    </div>
+    <footer>💡 首次OCR需下载语言包 (~30MB) 会稍慢 | Word仅支持 .docx (不支持旧版 .doc) | 图片越清晰识别越准 | MP3下载建议使用系统录音工具</footer>
+</div>
+
+<script>
+    // ---------- DOM 元素 ----------
+    const dropZone = document.getElementById('dropZone');
+    const fileInput = document.getElementById('fileInput');
+    const fileInfoArea = document.getElementById('fileInfoArea');
+    const fileNameDisplay = document.getElementById('fileNameDisplay');
+    const fileTypeHint = document.getElementById('fileTypeHint');
+    const resetBtn = document.getElementById('resetFileBtn');
+    const voiceSelect = document.getElementById('voiceSelect');
+    const speakBtn = document.getElementById('speakBtn');
+    const exportTextBtn = document.getElementById('exportTextBtn');
+    const statusDiv = document.getElementById('statusMsg');
+    const progressArea = document.getElementById('progressArea');
+    const ocrProgressBar = document.getElementById('ocrProgressBar');
+    const progressText = document.getElementById('progressText');
+
+    // 全局数据
+    let extractedText = "";
+    let currentFileName = "";
+    let currentFile = null;
+    let currentRate = 1.0;
+    let availableVoices = [];
+    let selectedVoiceURI = null;
+    let speechSynth = window.speechSynthesis;
+
+    // 辅助函数
+    function setStatus(msg, isError = false) {
+        statusDiv.innerHTML = isError ? `<span class="error">⚠️ ${msg}</span>` : `🎧 ${msg}`;
+    }
+
+    function enableControls(enable) {
+        speakBtn.disabled = !enable;
+        exportTextBtn.disabled = !enable;
+    }
+
+    function showProgress(show, percent = 0, text = "") {
+        if (show) {
+            progressArea.style.display = "block";
+            ocrProgressBar.style.width = `${percent}%`;
+            progressText.innerText = text;
+        } else {
+            progressArea.style.display = "none";
+        }
+    }
+
+    // 加载语音列表
+    function loadVoices() {
+        function populate() {
+            const voices = speechSynth.getVoices();
+            if (!voices.length) {
+                setTimeout(populate, 100);
+                return;
+            }
+            availableVoices = voices;
+            voiceSelect.innerHTML = '';
+            voices.forEach(voice => {
+                const option = document.createElement('option');
+                option.value = voice.voiceURI;
+                let genderHint = "";
+                const name = voice.name.toLowerCase();
+                if (name.includes('female') || name.includes('samantha') || name.includes('zira')) genderHint = " [女声]";
+                else if (name.includes('male') || name.includes('daniel') || name.includes('liam')) genderHint = " [男声]";
+                option.textContent = `${voice.name} (${voice.lang})${genderHint}`;
+                voiceSelect.appendChild(option);
+            });
+            if (voiceSelect.options.length) {
+                selectedVoiceURI = voiceSelect.options[0].value;
+            }
+        }
+        populate();
+        if (speechSynth.onvoiceschanged !== undefined) {
+            speechSynth.onvoiceschanged = populate;
+        }
+    }
+
+    // ---------- OCR 核心 (修正版本，兼容 Tesseract.js v4) ----------
+    async function recognizeImageFromCanvas(canvas, lang = 'eng+chi_sim') {
+        return new Promise((resolve, reject) => {
+            // 使用 Tesseract.recognize 直接识别，避免复杂 worker 初始化
+            Tesseract.recognize(
+                canvas,
+                lang,
+                {
+                    logger: m => {
+                        if (m.status === 'recognizing text') {
+                            const progress = Math.floor(m.progress * 100);
+                            showProgress(true, progress, `OCR 识别中... ${progress}%`);
+                        }
+                    }
+                }
+            ).then(({ data: { text } }) => {
+                resolve(text);
+            }).catch(err => {
+                reject(err);
+            });
+        });
+    }
+
+    function fileToCanvas(file) {
+        return new Promise((resolve, reject) => {
+            const img = new Image();
+            img.onload = () => {
+                const canvas = document.createElement('canvas');
+                canvas.width = img.width;
+                canvas.height = img.height;
+                const ctx = canvas.getContext('2d');
+                ctx.drawImage(img, 0, 0);
+                resolve(canvas);
+            };
+            img.onerror = reject;
+            img.src = URL.createObjectURL(file);
+        });
+    }
+
+    async function ocrPdfPages(pdfData, totalPages) {
+        let fullText = "";
+        for (let i = 1; i <= totalPages; i++) {
+            setStatus(`正在处理第 ${i} / ${totalPages} 页（OCR）...`);
+            const page = await pdfData.getPage(i);
+            const viewport = page.getViewport({ scale: 2.0 });
+            const canvas = document.createElement('canvas');
+            const context = canvas.getContext('2d');
+            canvas.width = viewport.width;
+            canvas.height = viewport.height;
+            await page.render({ canvasContext: context, viewport: viewport }).promise;
+            const pageText = await recognizeImageFromCanvas(canvas, 'eng+chi_sim');
+            fullText += pageText + "\n\n";
+        }
+        return fullText;
+    }
+
+    // ---------- 处理 Word (.docx) ----------
+    async function parseDocx(file) {
+        return new Promise((resolve, reject) => {
+            const reader = new FileReader();
+            reader.onload = async (e) => {
+                const arrayBuffer = e.target.result;
+                try {
+                    const result = await mammoth.extractRawText({ arrayBuffer: arrayBuffer });
+                    resolve(result.value);
+                } catch (err) {
+                    reject(err);
+                }
+            };
+            reader.onerror = reject;
+            reader.readAsArrayBuffer(file);
+        });
+    }
+
+    // ---------- 统一入口 ----------
+    async function processFile(file) {
+        if (!file) return;
+        const maxSize = 30 * 1024 * 1024;
+        if (file.size > maxSize) {
+            setStatus("文件超过 30MB，请压缩后再试", true);
+            return false;
+        }
+        currentFileName = file.name;
+        fileNameDisplay.innerText = file.name;
+        fileInfoArea.style.display = "flex";
+        enableControls(false);
+        extractedText = "";
+        showProgress(false);
+
+        const fileExt = file.name.split('.').pop().toLowerCase();
+        const isPdf = fileExt === 'pdf';
+        const isDocx = fileExt === 'docx';
+        const isImage = ['jpg', 'jpeg', 'png', 'webp', 'gif', 'bmp'].includes(fileExt);
+
+        try {
+            if (isPdf) {
+                fileTypeHint.innerText = "PDF 文档";
+                const arrayBuffer = await file.arrayBuffer();
+                const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
+                const totalPages = pdf.numPages;
+                fileTypeHint.innerText = `${totalPages} 页 PDF`;
+
+                // 快速检测是否为文字型PDF
+                let quickText = "";
+                for (let i = 1; i <= Math.min(totalPages, 3); i++) {
+                    const page = await pdf.getPage(i);
+                    const content = await page.getTextContent();
+                    const strings = content.items.map(item => item.str);
+                    quickText += strings.join(' ');
+                }
+                if (quickText.trim().length > 100) {
+                    setStatus("检测到文字型PDF，直接提取文字...");
+                    let fullText = "";
+                    for (let i = 1; i <= totalPages; i++) {
+                        const page = await pdf.getPage(i);
+                        const content = await page.getTextContent();
+                        const strings = content.items.map(item => item.str);
+                        fullText += strings.join(' ') + "\n";
+                        setStatus(`提取文字 ${i}/${totalPages}`);
+                    }
+                    extractedText = fullText.trim();
+                } else {
+                    setStatus("未检测到文字，启动OCR识别（可能需要1-2分钟）...");
+                    extractedText = await ocrPdfPages(pdf, totalPages);
+                }
+            } 
+            else if (isDocx) {
+                fileTypeHint.innerText = "Word 文档 (.docx)";
+                setStatus("正在解析 Word 文档...");
+                extractedText = await parseDocx(file);
+                if (!extractedText.trim()) throw new Error("未提取到文本");
+                setStatus(`Word 提取成功，共 ${extractedText.length} 字符`);
+            }
+            else if (isImage) {
+                fileTypeHint.innerText = "图片文件 (OCR)";
+                setStatus("正在对图片进行OCR识别...");
+                const canvas = await fileToCanvas(file);
+                extractedText = await recognizeImageFromCanvas(canvas, 'eng+chi_sim');
+            }
+            else {
+                setStatus("不支持的文件格式，请上传 PDF/图片/.docx", true);
+                return false;
+            }
+
+            if (!extractedText || extractedText.trim().length === 0) {
+                setStatus("未能识别出任何文字，请确保文件内容清晰且包含文字", true);
+                return false;
+            }
+
+            setStatus(`✅ 识别成功！共提取 ${extractedText.length} 字符，可点击朗读`);
+            enableControls(true);
+            return true;
+        } catch (err) {
+            console.error(err);
+            setStatus(`处理失败: ${err.message}`, true);
+            return false;
+        } finally {
+            showProgress(false);
+        }
+    }
+
+    // 朗读
+    function speak() {
+        if (!extractedText) {
+            setStatus("没有文本内容，请先上传文件", true);
+            return;
+        }
+        const voiceURI = voiceSelect.value;
+        const voiceObj = availableVoices.find(v => v.voiceURI === voiceURI);
+        if (!voiceObj) {
+            setStatus("语音引擎未准备好", true);
+            return;
+        }
+        speechSynth.cancel();
+        const utterance = new SpeechSynthesisUtterance(extractedText);
+        utterance.voice = voiceObj;
+        utterance.rate = currentRate;
+        utterance.onend = () => setStatus("朗读结束");
+        utterance.onerror = () => setStatus("朗读出错", true);
+        speechSynth.speak(utterance);
+        setStatus("🔊 正在朗读...");
+    }
+
+    // 导出文本
+    function exportText() {
+        if (!extractedText) {
+            setStatus("无文本可导出", true);
+            return;
+        }
+        const blob = new Blob([extractedText], { type: "text/plain" });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement("a");
+        a.href = url;
+        a.download = currentFileName.replace(/\.[^/.]+$/, "") + "_提取文本.txt";
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        URL.revokeObjectURL(url);
+        setStatus("文本已导出");
+    }
+
+    function resetAll() {
+        extractedText = "";
+        currentFile = null;
+        fileInfoArea.style.display = "none";
+        enableControls(false);
+        setStatus("已重置，可上传新文件");
+        speechSynth.cancel();
+        fileInput.value = "";
+        showProgress(false);
+    }
+
+    // --- 事件绑定 ---
+    dropZone.addEventListener("click", () => fileInput.click());
+    fileInput.addEventListener("change", (e) => {
+        if (e.target.files.length) processFile(e.target.files[0]);
+    });
+    resetBtn.addEventListener("click", resetAll);
+    speakBtn.addEventListener("click", speak);
+    exportTextBtn.addEventListener("click", exportText);
+
+    // 语速按钮
+    document.querySelectorAll(".speed-btn").forEach(btn => {
+        btn.addEventListener("click", () => {
+            document.querySelectorAll(".speed-btn").forEach(b => b.classList.remove("active"));
+            btn.classList.add("active");
+            currentRate = parseFloat(btn.getAttribute("data-rate"));
+            setStatus(`语速 ${currentRate}x`);
+        });
+    });
+
+    // 拖拽上传
+    dropZone.addEventListener("dragover", (e) => { e.preventDefault(); dropZone.style.borderColor = "#3b82f6"; });
+    dropZone.addEventListener("dragleave", () => { dropZone.style.borderColor = "#94a3b8"; });
+    dropZone.addEventListener("drop", async (e) => {
+        e.preventDefault();
+        dropZone.style.borderColor = "#94a3b8";
+        const file = e.dataTransfer.files[0];
+        if (file) await processFile(file);
+    });
+
+    loadVoices();
+</script>
+</body>
+</html>
